@@ -78,6 +78,7 @@ struct SigVerifierStats {
     total_batches: usize,
     total_packets: usize,
     total_dedup: usize,
+    total_dedup_votes: usize,
     total_excess_fail: usize,
     total_valid_packets: usize,
     total_shrinks: usize,
@@ -200,6 +201,7 @@ impl SigVerifierStats {
             ("total_batches", self.total_batches, i64),
             ("total_packets", self.total_packets, i64),
             ("total_dedup", self.total_dedup, i64),
+            ("total_dedup_votes", self.total_dedup_votes, i64),
             ("total_excess_fail", self.total_excess_fail, i64),
             ("total_valid_packets", self.total_valid_packets, i64),
             ("total_discard_random", self.total_discard_random, i64),
@@ -315,10 +317,10 @@ impl SigVerifyStage {
         discard_random_time.stop();
 
         let mut dedup_time = Measure::start("sigverify_dedup_time");
-        let discard_or_dedup_fail =
-            deduper::dedup_packets_and_count_discards(deduper, &mut batches) as usize;
+        let (discard_or_dedup_fail, deduped_votes) =
+            deduper::dedup_packets_and_count_discards(deduper, &mut batches);
         dedup_time.stop();
-        let num_unique = non_discarded_packets.saturating_sub(discard_or_dedup_fail);
+        let num_unique = non_discarded_packets.saturating_sub(discard_or_dedup_fail as usize);
 
         let mut discard_time = Measure::start("sigverify_discard_time");
         let mut num_packets_to_verify = num_unique;
@@ -371,7 +373,8 @@ impl SigVerifyStage {
         stats.packets_hist.increment(num_packets as u64).unwrap();
         stats.total_batches += batches_len;
         stats.total_packets += num_packets;
-        stats.total_dedup += discard_or_dedup_fail;
+        stats.total_dedup += discard_or_dedup_fail as usize;
+        stats.total_dedup_votes += deduped_votes as usize;
         stats.total_valid_packets += num_valid_packets;
         stats.total_discard_random_time_us += discard_random_time.as_us() as usize;
         stats.total_discard_random += num_discarded_randomly;

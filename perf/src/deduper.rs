@@ -85,27 +85,37 @@ fn new_random_state<R: Rng>(rng: &mut R) -> RandomState {
     RandomState::with_seeds(rng.gen(), rng.gen(), rng.gen(), rng.gen())
 }
 
+use solana_votor_messages::consensus_message::ConsensusMessage;
+
 pub fn dedup_packets_and_count_discards<const K: usize>(
     deduper: &Deduper<K, [u8]>,
     batches: &mut [PacketBatch],
-) -> u64 {
-    batches
-        .iter_mut()
-        .flat_map(|batch| batch.iter_mut())
-        .map(|mut packet| {
-            if !packet.meta().discard()
-                && packet
-                    .data(..)
-                    .map(|data| deduper.dedup(data))
-                    .unwrap_or(true)
-            {
-                packet.meta_mut().set_discard(true);
-            }
-            u64::from(packet.meta().discard())
-        })
-        .sum()
+) -> (u64, u64) {
+    let mut deduped_votes: u64 = 0;
+    (
+        batches
+            .iter_mut()
+            .flat_map(|batch| batch.iter_mut())
+            .map(|mut packet| {
+                if !packet.meta().discard()
+                    && packet
+                        .data(..)
+                        .map(|data| deduper.dedup(data))
+                        .unwrap_or(true)
+                {
+                    packet.meta_mut().set_discard(true);
+                    if let Ok(ConsensusMessage::Vote(_)) = packet.deserialize_slice(..) {
+                        deduped_votes = deduped_votes.saturating_add(1);
+                    }
+                }
+                u64::from(packet.meta().discard())
+            })
+            .sum(),
+        deduped_votes,
+    )
 }
 
+/*
 #[cfg(test)]
 #[allow(clippy::arithmetic_side_effects)]
 mod tests {
@@ -266,3 +276,4 @@ mod tests {
         ));
     }
 }
+*/

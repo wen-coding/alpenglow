@@ -54,7 +54,7 @@ impl SigVerifier for BLSSigVerifier {
 
             if packet.meta().discard() {
                 stats_updater.received_discarded += 1;
-                continue;
+                //                continue;
             }
 
             let message = match packet.deserialize_slice(..) {
@@ -65,6 +65,13 @@ impl SigVerifier for BLSSigVerifier {
                     continue;
                 }
             };
+
+            if packet.meta().discard() {
+                if let ConsensusMessage::Vote(_) = &message {
+                    stats_updater.received_discarded_votes += 1;
+                }
+                continue;
+            }
 
             let slot = match &message {
                 ConsensusMessage::Vote(vote_message) => vote_message.vote.slot(),
